@@ -17,7 +17,7 @@ you put SCL on 6 and SDA on 7 hehe six sevennnn
 uint8_t RECEIVER_MAC[] = {0x90, 0x64, 0x9B, 0x07, 0x1F, 0x14};
 
 //remov noise
-const float JAB_THRESHOLD = 5.0;
+const float JAB_THRESHOLD = 6.7;
 
 //remov misfiore
 const unsigned long DEBOUNCE_MS = 500;
@@ -42,8 +42,6 @@ typedef struct struct_message {
 struct_message outgoingData;
 
 void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
-  Serial.print("Send status: ");
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAILED");
 }
 
 void setup() {
@@ -96,7 +94,7 @@ void loop() {
   float accelY = accel.acceleration.y;
 
   // Uncomment while tuning JAB_THRESHOLD / TILT_ACCEL_RANGE:
-  // Serial.print(accelY); Serial.print("\t"); Serial.println(accelX);
+  Serial.print(accelY); Serial.print("\t"); Serial.println(accelX);
 
   // default: no discrete event this packet
   strcpy(outgoingData.command, "NONE");

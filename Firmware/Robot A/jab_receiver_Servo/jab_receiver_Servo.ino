@@ -14,20 +14,20 @@ reciever
 #define ESPNOW_CHANNEL 3
 
 // ---- ARM SERVO CONFIG ----
-const int ARM_SERVO_PIN = 6;
+const int ARM_SERVO_PIN = 7;
 const int REST_ANGLE = 90;    // neutral / guard position
-const int JAB_ANGLE   = 30;   // jab thrust position (60° one way from rest)
-const int BLOCK_ANGLE = 150;  // block position — mirrored, 60° the OPPOSITE way from rest
+const int JAB_ANGLE   = 180;   // jab thrust position (60° one way from rest)
+const int BLOCK_ANGLE = 0;  // block position — mirrored, 60° the OPPOSITE way from rest
 const unsigned long JAB_HOLD_MS   = 150;
 const unsigned long RETURN_PAUSE_MS = 200;
 
 // ---- BODY SERVO CONFIG ----
-const int BODY_SERVO_PIN = 5;
+const int BODY_SERVO_PIN = 6;
 const int BODY_REST_ANGLE = 90;
 const int BODY_TILT_SWING = 60;      // max degrees either side of rest
 const float TILT_ACCEL_RANGE = 8.0;  // must match sender's TILT_ACCEL_RANGE
 
-Servo jabServo;
+Servo armServo;
 Servo bodyServo;
 
 volatile bool jabTriggered = false;
@@ -69,9 +69,9 @@ void setup() {
   Serial.begin(115200);
 
   ESP32PWM::allocateTimer(0);
-  jabServo.setPeriodHertz(50);
-  jabServo.attach(ARM_SERVO_PIN, 500, 2400);
-  jabServo.write(REST_ANGLE);
+  armServo.setPeriodHertz(50);
+  armServo.attach(ARM_SERVO_PIN, 500, 2400);
+  armServo.write(REST_ANGLE);
 
   ESP32PWM::allocateTimer(1);
   bodyServo.setPeriodHertz(50);
@@ -106,12 +106,12 @@ void loop() {
     Serial.println("yeah im blocking rn");
   }
 
-  bodyServo.write(tiltToBodyAngle(latestTiltX));
+  // bodyServo.write(tiltToBodyAngle(latestTiltX));
 }
 
 void performMove(int targetAngle) {
-  jabServo.write(targetAngle);
+  armServo.write(targetAngle);
   delay(JAB_HOLD_MS);
-  jabServo.write(REST_ANGLE);
+  armServo.write(REST_ANGLE);
   delay(RETURN_PAUSE_MS);
 }
