@@ -3,7 +3,7 @@ Miniature robots powered by ESP32, servo motors, and remote control IMUs battle 
 
 [Demo Video](youtube.com)
 
-<img src="img/flyer.png" alt="flyer">
+<img src="flyer.png" alt="flyer">
 
 ## How to Use
 First, Make sure all the batteries are connected to the ESP32s.
@@ -31,7 +31,14 @@ The match ends when a balloon is popped; the player with the un-popped balloon w
 - AI used for debugging and programming
 
 ## Images
+CAD: \
+![img](https://cdn.hackclub.com/019f6cdb-78ef-7c29-9bce-c8b3d2df34cc/image.png)
 
+Side View Robot: \
+![img](https://cdn.hackclub.com/019f6cdc-ced4-7a76-82fa-916a1fb46b49/image.png)
+
+Top View Case: \
+![img](https://cdn.hackclub.com/019f6cde-561c-7350-b996-e37d2ed83027/image.png)
 
 ## Bill of Materials (BOM)
 [BOM.csv](BOM.csv)
