@@ -31,6 +31,9 @@ The match ends when a balloon is popped; the player with the un-popped balloon w
 - AI used for debugging and programming
 
 ## Images
+Wiring Diagram: \
+![img](Wiring-Diagram.png)
+
 CAD: \
 ![img](https://cdn.hackclub.com/019f6cdb-78ef-7c29-9bce-c8b3d2df34cc/image.png)
 
