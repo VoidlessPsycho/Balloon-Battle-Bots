@@ -1,8 +1,7 @@
 /*
-RIGHT CONTROLLER (Controller_R)
-you put SCL on 6 and SDA on 7 hehe six sevennnnn
+JAB CONTROLLER
+you put SCL on 6 and SDA on 7 hehe six sevennnn
 5v
-
 */
 
 #include <Wire.h>
@@ -14,57 +13,37 @@ you put SCL on 6 and SDA on 7 hehe six sevennnnn
 
 #define ESPNOW_CHANNEL 3
 
-
+// Add mac address of transmittetr aand reviever
 uint8_t RECEIVER_MAC[] = {0x90, 0x64, 0x9B, 0x07, 0x1F, 0x14};
 
-// six sevennnn
+//remov noise
+const float JAB_THRESHOLD = 5.0;
+
+//remov misfiore
+const unsigned long DEBOUNCE_MS = 500;
+
+// how far the body can "lean" in either direction before we clamp it,
+// in m/s^2 of X-axis acceleration. Tune this by watching Serial output
+// while tilting the sensor to its extremes.
+const float TILT_ACCEL_RANGE = 8.0;
+
+//six sevennnn
 const int SDA_PIN = 7;
 const int SCL_PIN = 6;
 
-
-#define CONTROLLER_ID_LEFT  0
-#define CONTROLLER_ID_RIGHT 1
-const uint8_t MY_CONTROLLER_ID = CONTROLLER_ID_RIGHT;
-
-const bool DEBUG_PRINT_MPU = true;
-const unsigned long DEBUG_PRINT_INTERVAL_MS = 200;
-unsigned long lastDebugPrint = 0;
-
 Adafruit_MPU6050 mpu;
+unsigned long lastJabTime = 0;
 
 typedef struct struct_message {
-  uint8_t controllerId;
-  float accelX;  
-  float gyroY;    
-  float gyroZ;
+  char command[10];
+  float tiltX;   // raw X-axis acceleration, sent every loop for the body servo
 } struct_message;
 
 struct_message outgoingData;
 
 void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
-  
-  // Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAILED");
-}
-
-void printAllMPUValues(const sensors_event_t &accel, const sensors_event_t &gyro, const sensors_event_t &temp) {
-  Serial.println(F("----- MPU6050 (Controller_R) -----"));
-  Serial.print(F("Accel (m/s^2)  X: "));
-  Serial.print(accel.acceleration.x, 3);
-  Serial.print(F("  Y: "));
-  Serial.print(accel.acceleration.y, 3);
-  Serial.print(F("  Z: "));
-  Serial.println(accel.acceleration.z, 3);
-
-  Serial.print(F("Gyro  (rad/s)  X: "));
-  Serial.print(gyro.gyro.x, 3);
-  Serial.print(F("  Y: "));
-  Serial.print(gyro.gyro.y, 3);
-  Serial.print(F("  Z: "));
-  Serial.println(gyro.gyro.z, 3);
-
-  Serial.print(F("Temp (C): "));
-  Serial.println(temp.temperature, 2);
-  Serial.println(F("-----------------------------------"));
+  Serial.print("Send status: ");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAILED");
 }
 
 void setup() {
@@ -86,7 +65,7 @@ void setup() {
   esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
   esp_wifi_set_ps(WIFI_PS_NONE);
 
-  Serial.print("Controller_R MAC: ");
+  Serial.print("Sender MAC: ");
   Serial.println(WiFi.macAddress());
 
   if (esp_now_init() != ESP_OK) {
@@ -105,22 +84,34 @@ void setup() {
     return;
   }
 
-  outgoingData.controllerId = MY_CONTROLLER_ID;
+  strcpy(outgoingData.command, "NONE");
+  outgoingData.tiltX = 0;
 }
 
 void loop() {
   sensors_event_t accel, gyro, temp;
   mpu.getEvent(&accel, &gyro, &temp);
 
-  if (DEBUG_PRINT_MPU && (millis() - lastDebugPrint) > DEBUG_PRINT_INTERVAL_MS) {
-    lastDebugPrint = millis();
-    printAllMPUValues(accel, gyro, temp);
+  float accelX = accel.acceleration.x;
+  float accelY = accel.acceleration.y;
+
+  // Uncomment while tuning JAB_THRESHOLD / TILT_ACCEL_RANGE:
+  // Serial.print(accelY); Serial.print("\t"); Serial.println(accelX);
+
+  // default: no discrete event this packet
+  strcpy(outgoingData.command, "NONE");
+
+  if (accelY > JAB_THRESHOLD && (millis() - lastJabTime) > DEBOUNCE_MS) {
+    lastJabTime = millis();
+    Serial.print("Jab detected, accelY=");
+    Serial.println(accelY);
+    strcpy(outgoingData.command, "JAB");
   }
 
-  outgoingData.accelX = accel.acceleration.y;
-  outgoingData.gyroY  = gyro.gyro.x;
-  outgoingData.gyroZ  = gyro.gyro.y;
+  // always send the current X tilt so the body servo can track it live
+  outgoingData.tiltX = accelX;
+
   esp_now_send(RECEIVER_MAC, (uint8_t *)&outgoingData, sizeof(outgoingData));
 
-  delay(10); // 100hz streaming
+  delay(10); // 100hz sampining
 }
