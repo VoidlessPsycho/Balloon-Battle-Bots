@@ -31,6 +31,18 @@ const float ACCEL_RESET_THRESHOLD = 9.0;
 const float ACCEL_DEADZONE = 0.5;
 const float GYRO_DEADZONE  = 0.1;
 
+// If |gyroZ| stays under this, the controller is treated as "parked" / not
+// being twisted, and its accelX/gyroY baseline keeps getting re-captured.
+// The moment gyroZ leaves this window, the baseline freezes wherever it
+// last was — that frozen reading becomes the user's new "zero" pose.
+// NOTE: gyro only measures rotation RATE, not orientation, so this detects
+// "not currently turning," which is not the same thing as "lying flat" in
+// every physical case. If you actually need true flatness (device resting
+// on a table regardless of whether it was just spun), that has to come
+// from the accelerometer (gravity vector) instead — happy to add that if
+// this doesn't behave the way you want in practice.
+const float FLAT_GYROZ_THRESHOLD = 0.15; // rad/s (~8.6 deg/s) — tune to taste
+
 
 const float SMOOTHING_ALPHA = 0.3;
 
@@ -48,11 +60,19 @@ typedef struct struct_message {
   uint8_t controllerId;
   float accelX;
   float gyroY;
+  float gyroZ;
 } struct_message;
 
 struct ControllerState {
   float accelX = 0;
   float gyroY = 0;
+  float gyroZ = 0;
+
+  // captured "zero" reference — see FLAT_GYROZ_THRESHOLD above
+  float baselineAccelX = 0;
+  float baselineGyroY = 0;
+  bool isFlat = true; // start parked so we don't jump on boot
+
   unsigned long lastSeenMs = 0;
 };
 
@@ -79,11 +99,13 @@ void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
   unsigned long now = millis();
   if (incoming.controllerId == CONTROLLER_ID_LEFT) {
     leftState.accelX = incoming.accelX;
-    leftState.gyroY = incoming.gyroY;
+    leftState.gyroY  = incoming.gyroY;
+    leftState.gyroZ  = incoming.gyroZ;
     leftState.lastSeenMs = now;
   } else if (incoming.controllerId == CONTROLLER_ID_RIGHT) {
     rightState.accelX = incoming.accelX;
-    rightState.gyroY = incoming.gyroY;
+    rightState.gyroY  = incoming.gyroY;
+    rightState.gyroZ  = incoming.gyroZ;
     rightState.lastSeenMs = now;
   }
 }
@@ -119,41 +141,69 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  
-  float rAccel = (now - rightState.lastSeenMs < CONTROLLER_TIMEOUT_MS) ? rightState.accelX : 0.0f;
-  float lAccel = (now - leftState.lastSeenMs  < CONTROLLER_TIMEOUT_MS) ? leftState.accelX  : 0.0f;
-  float rGyro  = (now - rightState.lastSeenMs < CONTROLLER_TIMEOUT_MS) ? rightState.gyroY  : 0.0f;
-  float lGyro  = (now - leftState.lastSeenMs  < CONTROLLER_TIMEOUT_MS) ? leftState.gyroY   : 0.0f;
+  bool rTimedOut = (now - rightState.lastSeenMs) >= CONTROLLER_TIMEOUT_MS;
+  bool lTimedOut = (now - leftState.lastSeenMs)  >= CONTROLLER_TIMEOUT_MS;
 
-  //tilt to reset in case yk
-  if (fabs(rAccel) >= ACCEL_RESET_THRESHOLD || fabs(lAccel) >= ACCEL_RESET_THRESHOLD) {
-    
+  float rAccelRaw = rTimedOut ? 0.0f : rightState.accelX;
+  float lAccelRaw = lTimedOut ? 0.0f : leftState.accelX;
+  float rGyroRaw  = rTimedOut ? 0.0f : rightState.gyroY;
+  float lGyroRaw  = lTimedOut ? 0.0f : leftState.gyroY;
+  float rGyroZ    = rTimedOut ? 0.0f : rightState.gyroZ;
+  float lGyroZ    = lTimedOut ? 0.0f : leftState.gyroZ;
+
+  // tilt to reset in case yk (this runs on RAW readings, before zeroing)
+  if (fabs(rAccelRaw) >= ACCEL_RESET_THRESHOLD || fabs(lAccelRaw) >= ACCEL_RESET_THRESHOLD) {
+
     rightState.accelX = 0.0f;
-    rightState.gyroY = 0.0f;
-    leftState.accelX = 0.0f;
-    leftState.gyroY = 0.0f;
-    
-    rAccel = 0.0f;
-    lAccel = 0.0f;
-    rGyro = 0.0f;
-    lGyro = 0.0f;
+    rightState.gyroY  = 0.0f;
+    leftState.accelX  = 0.0f;
+    leftState.gyroY   = 0.0f;
+
+    rAccelRaw = 0.0f;
+    lAccelRaw = 0.0f;
+    rGyroRaw  = 0.0f;
+    lGyroRaw  = 0.0f;
 
     //insta snap
     smoothedArmsAngle = REST_ANGLE;
     smoothedBodyAngle = REST_ANGLE;
-    
+
     if (DEBUG_PRINT_ANGLES) {
       Serial.println("--- SYSTEM RESET TRIGGERED BY 90-DEGREE TILT ---");
     }
   }
+
+  // --- Zero / "parked" handling ---
+  // While gyroZ stays near 0, keep sampling the current reading as the
+  // baseline. The instant it leaves that window, the baseline stops
+  // updating and stays frozen at whatever it last was — that becomes
+  // "zero" for the user until the next time it goes near-still again.
+  rightState.isFlat = fabs(rGyroZ) < FLAT_GYROZ_THRESHOLD;
+  leftState.isFlat  = fabs(lGyroZ) < FLAT_GYROZ_THRESHOLD;
+
+  if (rightState.isFlat) {
+    rightState.baselineAccelX = rAccelRaw;
+    rightState.baselineGyroY  = rGyroRaw;
+  }
+  if (leftState.isFlat) {
+    leftState.baselineAccelX = lAccelRaw;
+    leftState.baselineGyroY  = lGyroRaw;
+  }
+
+  float rAccel = rAccelRaw - rightState.baselineAccelX;
+  float lAccel = lAccelRaw - leftState.baselineAccelX;
+  float rGyro  = rGyroRaw  - rightState.baselineGyroY;
+  float lGyro  = lGyroRaw  - leftState.baselineGyroY;
 
   rAccel = applyDeadzone(rAccel, ACCEL_DEADZONE);
   lAccel = applyDeadzone(lAccel, ACCEL_DEADZONE);
   rGyro  = applyDeadzone(rGyro, GYRO_DEADZONE);
   lGyro  = applyDeadzone(lGyro, GYRO_DEADZONE);
 
-  .
-  float armsInput = rAccel - lAccel;
+  // Whichever hand is tilted more (by magnitude) wins — you only need to
+  // move one controller to drive the arms, the other can just sit still.
+  bool rightIsDriving = fabs(rAccel) >= fabs(lAccel);
+  float armsInput = rightIsDriving ? rAccel : lAccel;
   float armsTarget = mapFloat(armsInput, -ACCEL_FORWARD_MAX, ACCEL_FORWARD_MAX, 0, 180);
 
   // Body rotation avg
@@ -170,8 +220,16 @@ void loop() {
     lastDebugPrint = now;
     Serial.print("arms=");
     Serial.print(smoothedArmsAngle, 1);
+    Serial.print(" (");
+    Serial.print(rightIsDriving ? "R" : "L");
+    Serial.print(" driving)");
     Serial.print("  body=");
-    Serial.println(smoothedBodyAngle, 1);
+    Serial.print(smoothedBodyAngle, 1);
+    Serial.print("  [R flat=");
+    Serial.print(rightState.isFlat ? "Y" : "N");
+    Serial.print(" L flat=");
+    Serial.print(leftState.isFlat ? "Y" : "N");
+    Serial.println("]");
   }
 
   delay(10);

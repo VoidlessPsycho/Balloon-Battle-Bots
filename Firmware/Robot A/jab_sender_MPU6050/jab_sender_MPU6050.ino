@@ -36,13 +36,14 @@ typedef struct struct_message {
   uint8_t controllerId;
   float accelX;  
   float gyroY;    
+  float gyroZ;
 } struct_message;
 
 struct_message outgoingData;
 
 void onDataSent(const wifi_tx_info_t *tx_info, esp_now_send_status_t status) {
   
-  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAILED");
+  // Serial.println(status == ESP_NOW_SEND_SUCCESS ? "OK" : "FAILED");
 }
 
 void printAllMPUValues(const sensors_event_t &accel, const sensors_event_t &gyro, const sensors_event_t &temp) {
@@ -116,8 +117,9 @@ void loop() {
     printAllMPUValues(accel, gyro, temp);
   }
 
-  outgoingData.accelX = accel.acceleration.x;
+  outgoingData.accelX = accel.acceleration.y;
   outgoingData.gyroY  = gyro.gyro.y;
+  outgoingData.gyroZ  = gyro.gyro.z;
   esp_now_send(RECEIVER_MAC, (uint8_t *)&outgoingData, sizeof(outgoingData));
 
   delay(10); // 100hz streaming
