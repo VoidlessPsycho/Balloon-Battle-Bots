@@ -118,8 +118,8 @@ void loop() {
   }
 
   outgoingData.accelX = accel.acceleration.y;
-  outgoingData.gyroY  = gyro.gyro.y;
-  outgoingData.gyroZ  = gyro.gyro.z;
+  outgoingData.gyroY  = gyro.gyro.x;
+  outgoingData.gyroZ  = gyro.gyro.y;
   esp_now_send(RECEIVER_MAC, (uint8_t *)&outgoingData, sizeof(outgoingData));
 
   delay(10); // 100hz streaming
