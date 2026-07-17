@@ -18,10 +18,9 @@ const int ARM_SERVO_PIN = 7;
 const int REST_ANGLE = 90;    // neutral / guard position
 const int JAB_ANGLE   = 180;   // jab thrust position (60° one way from rest)
 const int BLOCK_ANGLE = 0;  // block position — mirrored, 60° the OPPOSITE way from rest
-const unsigned long JAB_HOLD_MS   = 150;
+const unsigned long HOLD_MS   = 350;
 const unsigned long RETURN_PAUSE_MS = 200;
 
-// ---- BODY SERVO CONFIG ----
 const int BODY_SERVO_PIN = 6;
 const int BODY_REST_ANGLE = 90;
 const int BODY_TILT_SWING = 60;      // max degrees either side of rest
@@ -45,8 +44,10 @@ float mapf(float x, float in_min, float in_max, float out_min, float out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-int tiltToBodyAngle(float accelX) {
-  float a = constrain(accelX, -TILT_ACCEL_RANGE, TILT_ACCEL_RANGE);
+int tiltToBodyAngle(float gyroX) 
+{
+  Serial.println(gyroX);
+  float a = constrain(gyroX, -TILT_ACCEL_RANGE, TILT_ACCEL_RANGE);
   return (int)mapf(a, -TILT_ACCEL_RANGE, TILT_ACCEL_RANGE,
                     BODY_REST_ANGLE - BODY_TILT_SWING,
                     BODY_REST_ANGLE + BODY_TILT_SWING);
@@ -55,6 +56,7 @@ int tiltToBodyAngle(float accelX) {
 void onDataRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
   if (len != sizeof(incomingData)) return;
   memcpy(&incomingData, data, sizeof(incomingData));
+  Serial.printf("Got command='%s' tiltX=%.2f\n", incomingData.command, incomingData.tiltX);
 
   latestTiltX = incomingData.tiltX;
 
@@ -106,12 +108,12 @@ void loop() {
     Serial.println("yeah im blocking rn");
   }
 
-  // bodyServo.write(tiltToBodyAngle(latestTiltX));
+  bodyServo.write(tiltToBodyAngle(latestTiltX));
 }
 
 void performMove(int targetAngle) {
   armServo.write(targetAngle);
-  delay(JAB_HOLD_MS);
+  delay(HOLD_MS);
   armServo.write(REST_ANGLE);
   delay(RETURN_PAUSE_MS);
 }

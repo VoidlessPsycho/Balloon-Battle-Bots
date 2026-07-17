@@ -14,6 +14,8 @@ you put SCL on 6 and SDA on 7 hehe six sevennnn
 #define ESPNOW_CHANNEL 3
 
 // Add mac address of transmittetr aand reviever
+//E0:72:A1:72:9B:FC transmitter B
+//90:64:9B:07:1F:14 transmitter A
 uint8_t RECEIVER_MAC[] = {0x90, 0x64, 0x9B, 0x07, 0x1F, 0x14};
 
 //remov noise
@@ -26,6 +28,9 @@ const unsigned long DEBOUNCE_MS = 500;
 // in m/s^2 of X-axis acceleration. Tune this by watching Serial output
 // while tilting the sensor to its extremes.
 const float TILT_ACCEL_RANGE = 8.0;
+
+// CHANGED: Using a C-style string instead of an Arduino String object
+const char* TYPE = "JAB";
 
 //six sevennnn
 const int SDA_PIN = 7;
@@ -90,11 +95,11 @@ void loop() {
   sensors_event_t accel, gyro, temp;
   mpu.getEvent(&accel, &gyro, &temp);
 
-  float accelX = accel.acceleration.x;
+  float gyroX = gyro.gyro.x;
   float accelY = accel.acceleration.y;
 
   // Uncomment while tuning JAB_THRESHOLD / TILT_ACCEL_RANGE:
-  Serial.print(accelY); Serial.print("\t"); Serial.println(accelX);
+  Serial.print(accelY); Serial.print("\t"); Serial.println(gyroX);
 
   // default: no discrete event this packet
   strcpy(outgoingData.command, "NONE");
@@ -103,11 +108,13 @@ void loop() {
     lastJabTime = millis();
     Serial.print("Jab detected, accelY=");
     Serial.println(accelY);
-    strcpy(outgoingData.command, "JAB");
+    
+    // This will now compile perfectly
+    strcpy(outgoingData.command, TYPE);
   }
 
   // always send the current X tilt so the body servo can track it live
-  outgoingData.tiltX = accelX;
+  outgoingData.tiltX = gyroX;
 
   esp_now_send(RECEIVER_MAC, (uint8_t *)&outgoingData, sizeof(outgoingData));
 
